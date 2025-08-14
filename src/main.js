@@ -2,7 +2,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Get the canvas element
     const canvas = document.getElementById('view');
-    const ctx = canvas.getContext('2d');
+    // Get the rendering context with options for alpha compositing and better performance
+    const ctx = canvas.getContext('2d', { 
+        alpha: false,             // No transparency needed for black hole sim background
+        desynchronized: true,     // Potential performance boost on supported browsers
+        willReadFrequently: false // We're not reading pixel data
+    });
     
     // Get control elements
     const massSlider = document.getElementById('mass');
@@ -11,14 +16,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetButton = document.getElementById('reset');
     const startPauseButton = document.getElementById('start-pause');
     
-    // Set canvas dimensions
+    // Get device pixel ratio
+    function getDevicePixelRatio() {
+        return window.devicePixelRatio || 1;
+    }
+    
+    // Set canvas dimensions with proper DPR handling for high-DPI displays
     function resizeCanvas() {
         const container = canvas.parentElement;
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
+        const dpr = getDevicePixelRatio();
         
-        // Redraw after resize
-        draw();
+        // Get the CSS dimensions (logical size)
+        const displayWidth = container.clientWidth;
+        const displayHeight = container.clientHeight;
+        
+        // Check if the canvas size actually changed to avoid unnecessary resets
+        const sizeChanged = 
+            canvas.displayWidth !== displayWidth || 
+            canvas.displayHeight !== displayHeight;
+            
+        if (sizeChanged) {
+            // Save the current transform state
+            const prevTransform = ctx.getTransform();
+            
+            // Reset the canvas size
+            canvas.width = Math.floor(displayWidth * dpr);
+            canvas.height = Math.floor(displayHeight * dpr);
+            
+            // Set the canvas size in CSS pixels (for layout)
+            canvas.style.width = `${displayWidth}px`;
+            canvas.style.height = `${displayHeight}px`;
+            
+            // Reset and apply the device scale factor
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+            ctx.scale(dpr, dpr);
+            
+            // Store the display dimensions for use in drawing
+            canvas.displayWidth = displayWidth;
+            canvas.displayHeight = displayHeight;
+            
+            if (DEBUG_MODE) {
+                console.log(`Canvas resized: ${displayWidth}x${displayHeight} (DPR: ${dpr})`);
+            }
+            
+            // Redraw after resize
+            draw();
+        }
     }
     
     // Handle orientation changes specially on mobile
@@ -31,8 +74,21 @@ document.addEventListener('DOMContentLoaded', () => {
     resizeCanvas();
     
     // Respond to window resize and orientation change
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', debounce(resizeCanvas, 250));
     window.addEventListener('orientationchange', handleOrientationChange);
+    
+    // Debounce function to prevent excessive resizing
+    function debounce(func, wait) {
+        let timeout;
+        return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                func.apply(context, args);
+            }, wait);
+        };
+    }
     
     // Handle visibility changes to prevent rendering issues
     document.addEventListener('visibilitychange', () => {
@@ -49,6 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let fps = 0;
     let frameCount = 0;
     let lastFpsUpdateTime = 0;
+    
+    // Debug mode (can be toggled during development)
+    const DEBUG_MODE = false; // Set to true to see debug info
     
     // Simulation parameters
     let params = {
@@ -178,25 +237,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Draw the current state to the canvas
     function draw() {
-        // Clear canvas
+        // Get the logical (CSS) display dimensions
+        const displayWidth = canvas.displayWidth || canvas.width;
+        const displayHeight = canvas.displayHeight || canvas.height;
+        
+        // Clear canvas - use displayWidth/Height for clearing
         ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, displayWidth, displayHeight);
         
-        // Uncomment to display debug stats during development
-        /*
-        // Draw debug stats
-        ctx.font = '14px monospace';
-        ctx.fillStyle = '#58a6ff';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`FPS: ${fps}`, 10, 10);
-        ctx.fillText(`Rotation Speed: ${params.rotationSpeed.toFixed(2)} rad/s`, 10, 30);
-        ctx.fillText(`Disk Angle: ${(params.diskAngle * 180 / Math.PI).toFixed(1)}°`, 10, 50);
-        */
+        // Show debug stats if debug mode is enabled
+        if (DEBUG_MODE) {
+            ctx.font = '14px monospace';
+            ctx.fillStyle = '#58a6ff';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`FPS: ${fps}`, 10, 10);
+            ctx.fillText(`Display: ${displayWidth}x${displayHeight}`, 10, 30);
+            ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 10, 50);
+            ctx.fillText(`DPR: ${getDevicePixelRatio()}`, 10, 70);
+            ctx.fillText(`Rotation Speed: ${params.rotationSpeed.toFixed(2)} rad/s`, 10, 90);
+        }
         
-        // Calculate center and radius
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        // Calculate center and radius (use logical coordinates)
+        const centerX = displayWidth / 2;
+        const centerY = displayHeight / 2;
         const radius = params.mass * params.zoom / 100;
         
         // Draw a placeholder black hole (simple black circle with event horizon)
@@ -267,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const centerX = rect.width / 2;
         const centerY = rect.height / 2;
         
+        // Get client coordinates in CSS pixels (not affected by DPR)
         const currentX = clientX - rect.left;
         const currentY = clientY - rect.top;
         

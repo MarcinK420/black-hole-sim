@@ -91,6 +91,11 @@ main {
     display: block;
     background-color: #000;
     touch-action: manipulation;
+    object-fit: contain; /* Prevent stretching */
+    image-rendering: -webkit-optimize-contrast; /* Improve rendering on Webkit */
+    image-rendering: crisp-edges; /* Improve rendering in Firefox */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 @media (max-width: 768px) {
