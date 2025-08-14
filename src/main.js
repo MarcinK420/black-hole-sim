@@ -21,11 +21,25 @@ document.addEventListener('DOMContentLoaded', () => {
         draw();
     }
     
+    // Handle orientation changes specially on mobile
+    function handleOrientationChange() {
+        // Add a small delay to allow the browser to update dimensions
+        setTimeout(resizeCanvas, 300);
+    }
+    
     // Initialize the canvas size
     resizeCanvas();
     
-    // Respond to window resize
+    // Respond to window resize and orientation change
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    // Handle visibility changes to prevent rendering issues
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            resizeCanvas();
+        }
+    });
     
     // Variables for simulation state
     let isRunning = false;
@@ -174,6 +188,79 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         }
     }
+    
+    // Add touch and mouse interaction for mobile
+    let isDragging = false;
+    let lastTouchX, lastTouchY;
+    
+    // Handle touch/mouse interactions
+    function handleInteractionStart(clientX, clientY) {
+        isDragging = true;
+        lastTouchX = clientX;
+        lastTouchY = clientY;
+    }
+    
+    function handleInteractionMove(clientX, clientY) {
+        if (!isDragging) return;
+        
+        // Calculate the distance from center
+        const rect = canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        const currentX = clientX - rect.left;
+        const currentY = clientY - rect.top;
+        
+        // Calculate distance from center (simple way to adjust rotation based on movement)
+        const distFromCenter = Math.sqrt(
+            Math.pow(currentX - centerX, 2) + 
+            Math.pow(currentY - centerY, 2)
+        );
+        
+        // Update rotation based on touch movement and distance from center
+        const dx = currentX - lastTouchX;
+        const dy = currentY - lastTouchY;
+        const moveAmount = Math.sqrt(dx * dx + dy * dy);
+        
+        // Adjust rotation based on movement direction
+        const rotationChange = moveAmount * 0.5; // Sensitivity factor
+        const newRotation = Math.min(100, Math.max(0, 
+            parseInt(rotationSlider.value) + (dx > 0 ? rotationChange : -rotationChange)
+        ));
+        
+        rotationSlider.value = newRotation;
+        params.rotation = newRotation;
+        updateValueDisplays();
+        
+        lastTouchX = currentX;
+        lastTouchY = currentY;
+    }
+    
+    function handleInteractionEnd() {
+        isDragging = false;
+    }
+    
+    // Mouse events
+    canvas.addEventListener('mousedown', e => handleInteractionStart(e.clientX, e.clientY));
+    canvas.addEventListener('mousemove', e => handleInteractionMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', handleInteractionEnd);
+    canvas.addEventListener('mouseleave', handleInteractionEnd);
+    
+    // Touch events
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault(); // Prevent scrolling when touching the canvas
+        const touch = e.touches[0];
+        handleInteractionStart(touch.clientX, touch.clientY);
+    });
+    
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleInteractionMove(touch.clientX, touch.clientY);
+    });
+    
+    canvas.addEventListener('touchend', handleInteractionEnd);
+    canvas.addEventListener('touchcancel', handleInteractionEnd);
     
     // Initialize displays
     updateValueDisplays();
