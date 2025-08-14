@@ -44,12 +44,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Variables for simulation state
     let isRunning = false;
     let animationFrameId = null;
+    let lastFrameTime = 0;
+    let accumulatedTime = 0;
+    let fps = 0;
+    let frameCount = 0;
+    let lastFpsUpdateTime = 0;
     
     // Simulation parameters
     let params = {
         mass: 50,
         rotation: 0,
-        zoom: 100
+        zoom: 100,
+        rotationSpeed: 0, // Actual rotation speed in radians per second
+        diskAngle: 0      // Current angle of accretion disk
     };
     
     // Update value displays
@@ -75,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     rotationSlider.addEventListener('input', () => {
         params.rotation = parseInt(rotationSlider.value);
+        params.rotationSpeed = params.rotation * 0.05; // Update rotation speed
         updateValueDisplays();
         draw();
     });
@@ -97,8 +105,15 @@ document.addEventListener('DOMContentLoaded', () => {
         params = {
             mass: 50,
             rotation: 0,
-            zoom: 100
+            zoom: 100,
+            rotationSpeed: 0,
+            diskAngle: 0
         };
+        
+        // Reset animation timing variables
+        lastFrameTime = performance.now();
+        accumulatedTime = 0;
+        frameCount = 0;
         
         updateValueDisplays();
         draw();
@@ -110,22 +125,55 @@ document.addEventListener('DOMContentLoaded', () => {
         startPauseButton.textContent = isRunning ? 'Pause' : 'Start';
         
         if (isRunning) {
-            animate();
+            // Reset time tracking when starting animation
+            lastFrameTime = performance.now();
+            animationFrameId = requestAnimationFrame(animate);
         } else if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
         }
     }
     
-    // Animation loop
-    function animate() {
-        // Update simulation state here
+    // Animation loop with proper time calculations
+    function animate(currentTime) {
+        // Calculate delta time in seconds
+        if (!lastFrameTime) lastFrameTime = currentTime;
+        const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.1); // Seconds, capped at 0.1s
+        lastFrameTime = currentTime;
         
+        // Update FPS counter
+        frameCount++;
+        accumulatedTime += dt;
+        
+        // Update FPS once per second
+        if (currentTime - lastFpsUpdateTime > 1000) {
+            fps = Math.round(frameCount / accumulatedTime);
+            frameCount = 0;
+            accumulatedTime = 0;
+            lastFpsUpdateTime = currentTime;
+            // Uncomment to debug FPS: console.log(`FPS: ${fps}`);
+        }
+        
+        // Update simulation state
+        updateSimulation(dt);
+        
+        // Draw current state
         draw();
         
+        // Continue animation loop if still running
         if (isRunning) {
             animationFrameId = requestAnimationFrame(animate);
         }
+    }
+    
+    // Update simulation physics
+    function updateSimulation(dt) {
+        // Update rotation based on current rotation speed parameter
+        params.rotationSpeed = params.rotation * 0.05; // Scale rotation parameter to radians per second
+        params.diskAngle += params.rotationSpeed * dt; // Increment angle based on dt
+        
+        // Keep angle within 0-2π range to avoid floating point issues over time
+        params.diskAngle = params.diskAngle % (Math.PI * 2);
     }
     
     // Draw the current state to the canvas
@@ -133,6 +181,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear canvas
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Uncomment to display debug stats during development
+        /*
+        // Draw debug stats
+        ctx.font = '14px monospace';
+        ctx.fillStyle = '#58a6ff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`FPS: ${fps}`, 10, 10);
+        ctx.fillText(`Rotation Speed: ${params.rotationSpeed.toFixed(2)} rad/s`, 10, 30);
+        ctx.fillText(`Disk Angle: ${(params.diskAngle * 180 / Math.PI).toFixed(1)}°`, 10, 50);
+        */
         
         // Calculate center and radius
         const centerX = canvas.width / 2;
@@ -164,11 +224,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (params.rotation > 0) {
             const diskRadius = radius * 1.5;
             const diskThickness = radius * 0.2;
-            const rotationAngle = (Date.now() / 1000) * (params.rotation / 50);
             
             ctx.save();
             ctx.translate(centerX, centerY);
-            ctx.rotate(rotationAngle);
+            ctx.rotate(params.diskAngle);
             
             // Draw accretion disk
             const diskGradient = ctx.createRadialGradient(
@@ -230,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         rotationSlider.value = newRotation;
         params.rotation = newRotation;
+        params.rotationSpeed = params.rotation * 0.05; // Update rotation speed
         updateValueDisplays();
         
         lastTouchX = currentX;
