@@ -13,8 +13,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const massSlider = document.getElementById('mass');
     const rotationSlider = document.getElementById('rotation');
     const zoomSlider = document.getElementById('zoom');
+    const timeScaleSlider = document.getElementById('timeScale');
+    const dragSlider = document.getElementById('drag');
+    const particlesSlider = document.getElementById('particles');
+    const trailsCheckbox = document.getElementById('trails');
+    const trailLengthSlider = document.getElementById('trailLength');
+    const seedInput = document.getElementById('seed');
     const resetButton = document.getElementById('reset');
     const startPauseButton = document.getElementById('start-pause');
+    const advancedToggleButton = document.getElementById('advanced-toggle');
     
     // Get device pixel ratio
     function getDevicePixelRatio() {
@@ -111,11 +118,99 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Simulation parameters
     let params = {
-        mass: 50,
-        rotation: 0,
-        zoom: 100,
-        rotationSpeed: 0, // Actual rotation speed in radians per second
-        diskAngle: 0      // Current angle of accretion disk
+        // Basic UI controls
+        mass: 50,               // Mass slider value (0-100)
+        rotation: 0,            // Rotation slider value (0-100)
+        zoom: 100,              // Zoom slider value (10-200)
+        
+        // Internal calculated values
+        rotationSpeed: 0,       // Actual rotation speed in radians per second
+        diskAngle: 0,           // Current angle of accretion disk
+        
+        // Physics parameters
+        G: 6.67430e-11,         // Gravitational constant (m^3 kg^-1 s^-2)
+        M: 1.0e6,               // Black hole mass in solar masses
+        rs: 2.95,               // Schwarzschild radius in km
+        timeScale: 1.0,         // Simulation time scale factor
+        
+        // Particle system parameters
+        drag: 0.02,             // Drag coefficient (0-1)
+        trails: true,           // Whether to show particle trails
+        trailLength: 50,        // Length of particle trails
+        seed: 12345,            // Random seed for particle generation
+        particles: 500,         // Number of particles in simulation
+        
+        // Utility methods for getting/setting parameters
+        get schwarzschildRadius() {
+            // Calculate Schwarzschild radius based on mass
+            // rs = 2GM/c^2, but we'll use the mass slider to scale from the base rs
+            return this.rs * (this.mass / 50);
+        },
+        
+        get blackHoleMass() {
+            // Convert UI mass value to actual solar masses
+            return this.M * (this.mass / 50);
+        },
+        
+        // Method to update derived parameters when base parameters change
+        updateDerivedParams() {
+            // Update rotation speed based on rotation slider
+            this.rotationSpeed = this.rotation * 0.05;
+        },
+        
+        // Method to load parameters from localStorage if available
+        loadFromStorage() {
+            try {
+                const storedParams = localStorage.getItem('blackHoleParams');
+                if (storedParams) {
+                    const parsedParams = JSON.parse(storedParams);
+                    
+                    // Update only the serializable properties
+                    this.mass = parsedParams.mass ?? this.mass;
+                    this.rotation = parsedParams.rotation ?? this.rotation;
+                    this.zoom = parsedParams.zoom ?? this.zoom;
+                    this.M = parsedParams.M ?? this.M;
+                    this.rs = parsedParams.rs ?? this.rs;
+                    this.timeScale = parsedParams.timeScale ?? this.timeScale;
+                    this.drag = parsedParams.drag ?? this.drag;
+                    this.trails = parsedParams.trails ?? this.trails;
+                    this.trailLength = parsedParams.trailLength ?? this.trailLength;
+                    this.seed = parsedParams.seed ?? this.seed;
+                    this.particles = parsedParams.particles ?? this.particles;
+                    
+                    // Update derived parameters
+                    this.updateDerivedParams();
+                    return true;
+                }
+            } catch (e) {
+                console.error('Error loading parameters from storage:', e);
+            }
+            return false;
+        },
+        
+        // Method to save parameters to localStorage
+        saveToStorage() {
+            try {
+                const paramsToSave = {
+                    mass: this.mass,
+                    rotation: this.rotation,
+                    zoom: this.zoom,
+                    M: this.M,
+                    rs: this.rs,
+                    timeScale: this.timeScale,
+                    drag: this.drag,
+                    trails: this.trails,
+                    trailLength: this.trailLength,
+                    seed: this.seed,
+                    particles: this.particles
+                };
+                localStorage.setItem('blackHoleParams', JSON.stringify(paramsToSave));
+                return true;
+            } catch (e) {
+                console.error('Error saving parameters to storage:', e);
+                return false;
+            }
+        }
     };
     
     // Update value displays
@@ -124,15 +219,45 @@ document.addEventListener('DOMContentLoaded', () => {
             const input = group.querySelector('input');
             const display = group.querySelector('.value-display');
             
-            if (input && display) {
+            if (input && display && input.type !== 'checkbox' && input.type !== 'number') {
                 let value = input.value;
-                if (input.id === 'zoom') value += '%';
+                
+                // Format different types of values
+                switch(input.id) {
+                    case 'zoom':
+                        value += '%';
+                        break;
+                    case 'timeScale':
+                        value += 'x';
+                        break;
+                    case 'drag':
+                    case 'timeScale':
+                        // For floating point values, show 2 decimal places
+                        value = parseFloat(value).toFixed(2);
+                        break;
+                    case 'mass':
+                        // Show equivalent mass in solar masses
+                        // const equivalentMass = (params.M * (parseInt(value) / 50)).toExponential(2);
+                        // value = `${value} (${equivalentMass} M☉)`;
+                        break;
+                }
+                
                 display.textContent = value;
             }
         });
+        
+        // Update seed input if it exists
+        if (seedInput) {
+            seedInput.value = params.seed;
+        }
+        
+        // Update trails checkbox if it exists
+        if (trailsCheckbox) {
+            trailsCheckbox.checked = params.trails;
+        }
     }
     
-    // Add event listeners to controls
+    // Add event listeners to basic controls
     massSlider.addEventListener('input', () => {
         params.mass = parseInt(massSlider.value);
         updateValueDisplays();
@@ -141,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     rotationSlider.addEventListener('input', () => {
         params.rotation = parseInt(rotationSlider.value);
-        params.rotationSpeed = params.rotation * 0.05; // Update rotation speed
+        params.updateDerivedParams(); // Update rotation speed
         updateValueDisplays();
         draw();
     });
@@ -152,27 +277,160 @@ document.addEventListener('DOMContentLoaded', () => {
         draw();
     });
     
+    // Add event listeners to advanced physics controls
+    timeScaleSlider?.addEventListener('input', () => {
+        params.timeScale = parseFloat(timeScaleSlider.value);
+        updateValueDisplays();
+    });
+    
+    dragSlider?.addEventListener('input', () => {
+        params.drag = parseFloat(dragSlider.value);
+        updateValueDisplays();
+    });
+    
+    // Add event listeners to particle controls
+    particlesSlider?.addEventListener('input', () => {
+        params.particles = parseInt(particlesSlider.value);
+        updateValueDisplays();
+    });
+    
+    trailsCheckbox?.addEventListener('change', () => {
+        params.trails = trailsCheckbox.checked;
+    });
+    
+    trailLengthSlider?.addEventListener('input', () => {
+        params.trailLength = parseInt(trailLengthSlider.value);
+        updateValueDisplays();
+    });
+    
+    seedInput?.addEventListener('change', () => {
+        params.seed = parseInt(seedInput.value);
+        // Regenerate particles when seed changes
+        if (isRunning) {
+            // If simulation is running, we might want to regenerate particles
+            // This will be implemented in a future feature
+        }
+    });
+    
+    // Action buttons
     resetButton.addEventListener('click', resetSimulation);
     startPauseButton.addEventListener('click', toggleSimulation);
     
+    // Toggle advanced settings visibility
+    advancedToggleButton?.addEventListener('click', () => {
+        const advancedSections = document.querySelectorAll('.advanced-controls');
+        advancedSections.forEach(section => {
+            section.classList.toggle('visible');
+        });
+        
+        advancedToggleButton.textContent = 
+            advancedToggleButton.textContent === 'Advanced' ? 'Basic' : 'Advanced';
+    });
+    
     // Reset simulation to default values
     function resetSimulation() {
+        // Reset UI sliders
         massSlider.value = 50;
         rotationSlider.value = 0;
         zoomSlider.value = 100;
         
+        // Reset all parameters to default values
         params = {
+            // Basic UI controls
             mass: 50,
             rotation: 0,
             zoom: 100,
+            
+            // Internal calculated values
             rotationSpeed: 0,
-            diskAngle: 0
+            diskAngle: 0,
+            
+            // Physics parameters
+            G: 6.67430e-11,
+            M: 1.0e6,
+            rs: 2.95,
+            timeScale: 1.0,
+            
+            // Particle system parameters
+            drag: 0.02,
+            trails: true,
+            trailLength: 50,
+            seed: 12345,
+            particles: 500,
+            
+            // Maintain the getter methods
+            get schwarzschildRadius() {
+                return this.rs * (this.mass / 50);
+            },
+            
+            get blackHoleMass() {
+                return this.M * (this.mass / 50);
+            },
+            
+            updateDerivedParams() {
+                this.rotationSpeed = this.rotation * 0.05;
+            },
+            
+            loadFromStorage() {
+                try {
+                    const storedParams = localStorage.getItem('blackHoleParams');
+                    if (storedParams) {
+                        const parsedParams = JSON.parse(storedParams);
+                        this.mass = parsedParams.mass ?? this.mass;
+                        this.rotation = parsedParams.rotation ?? this.rotation;
+                        this.zoom = parsedParams.zoom ?? this.zoom;
+                        this.M = parsedParams.M ?? this.M;
+                        this.rs = parsedParams.rs ?? this.rs;
+                        this.timeScale = parsedParams.timeScale ?? this.timeScale;
+                        this.drag = parsedParams.drag ?? this.drag;
+                        this.trails = parsedParams.trails ?? this.trails;
+                        this.trailLength = parsedParams.trailLength ?? this.trailLength;
+                        this.seed = parsedParams.seed ?? this.seed;
+                        this.particles = parsedParams.particles ?? this.particles;
+                        this.updateDerivedParams();
+                        return true;
+                    }
+                } catch (e) {
+                    console.error('Error loading parameters from storage:', e);
+                }
+                return false;
+            },
+            
+            saveToStorage() {
+                try {
+                    const paramsToSave = {
+                        mass: this.mass,
+                        rotation: this.rotation,
+                        zoom: this.zoom,
+                        M: this.M,
+                        rs: this.rs,
+                        timeScale: this.timeScale,
+                        drag: this.drag,
+                        trails: this.trails,
+                        trailLength: this.trailLength,
+                        seed: this.seed,
+                        particles: this.particles
+                    };
+                    localStorage.setItem('blackHoleParams', JSON.stringify(paramsToSave));
+                    return true;
+                } catch (e) {
+                    console.error('Error saving parameters to storage:', e);
+                    return false;
+                }
+            }
         };
         
         // Reset animation timing variables
         lastFrameTime = performance.now();
         accumulatedTime = 0;
         frameCount = 0;
+        
+        // Remove any saved parameters
+        try {
+            localStorage.removeItem('blackHoleParams');
+        } catch (e) {
+            console.error('Error removing stored parameters:', e);
+        }
         
         updateValueDisplays();
         draw();
@@ -227,12 +485,18 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update simulation physics
     function updateSimulation(dt) {
+        // Apply time scaling to dt
+        const scaledDt = dt * params.timeScale;
+        
         // Update rotation based on current rotation speed parameter
-        params.rotationSpeed = params.rotation * 0.05; // Scale rotation parameter to radians per second
-        params.diskAngle += params.rotationSpeed * dt; // Increment angle based on dt
+        params.updateDerivedParams(); // Update rotation speed from slider value
+        params.diskAngle += params.rotationSpeed * scaledDt; // Increment angle based on scaled dt
         
         // Keep angle within 0-2π range to avoid floating point issues over time
         params.diskAngle = params.diskAngle % (Math.PI * 2);
+        
+        // Here we would update particle positions and apply physics
+        // This will be implemented in a future feature when we add particles
     }
     
     // Draw the current state to the canvas
@@ -256,6 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 10, 50);
             ctx.fillText(`DPR: ${getDevicePixelRatio()}`, 10, 70);
             ctx.fillText(`Rotation Speed: ${params.rotationSpeed.toFixed(2)} rad/s`, 10, 90);
+            ctx.fillText(`Time Scale: ${params.timeScale.toFixed(1)}x`, 10, 110);
+            ctx.fillText(`Schwarzschild Radius: ${params.schwarzschildRadius.toFixed(2)} km`, 10, 130);
+            ctx.fillText(`Black Hole Mass: ${params.blackHoleMass.toExponential(2)} M☉`, 10, 150);
+            ctx.fillText(`Particles: ${params.particles}`, 10, 170);
+            ctx.fillText(`Trails: ${params.trails ? 'On' : 'Off'}`, 10, 190);
         }
         
         // Calculate center and radius (use logical coordinates)
@@ -387,9 +656,34 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.addEventListener('touchend', handleInteractionEnd);
     canvas.addEventListener('touchcancel', handleInteractionEnd);
     
+    // Try to load parameters from localStorage
+    if (params.loadFromStorage()) {
+        console.log('Parameters loaded from localStorage');
+        
+        // Update UI sliders to match loaded parameters
+        if (massSlider) massSlider.value = params.mass;
+        if (rotationSlider) rotationSlider.value = params.rotation;
+        if (zoomSlider) zoomSlider.value = params.zoom;
+        if (timeScaleSlider) timeScaleSlider.value = params.timeScale;
+        if (dragSlider) dragSlider.value = params.drag;
+        if (particlesSlider) particlesSlider.value = params.particles;
+        if (trailsCheckbox) trailsCheckbox.checked = params.trails;
+        if (trailLengthSlider) trailLengthSlider.value = params.trailLength;
+        if (seedInput) seedInput.value = params.seed;
+    }
+    
     // Initialize displays
     updateValueDisplays();
     
     // Initial draw
     draw();
+    
+    // Auto-save parameters to localStorage when they change
+    function autoSaveParams() {
+        if (isRunning) {
+            params.saveToStorage();
+        }
+        setTimeout(autoSaveParams, 5000); // Save every 5 seconds while running
+    }
+    autoSaveParams();
 });

@@ -17,24 +17,70 @@
             </section>
             <section class="control-panel">
                 <h2>Control Panel</h2>
-                <div class="control-group">
-                    <label for="mass">Black Hole Mass</label>
-                    <input type="range" id="mass" min="1" max="100" value="50">
-                    <span class="value-display">50</span>
+                
+                <!-- Basic Controls -->
+                <div class="control-section">
+                    <h3>Basic Settings</h3>
+                    <div class="control-group">
+                        <label for="mass">Black Hole Mass</label>
+                        <input type="range" id="mass" min="1" max="100" value="50">
+                        <span class="value-display">50</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="rotation">Rotation Speed</label>
+                        <input type="range" id="rotation" min="0" max="100" value="0">
+                        <span class="value-display">0</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="zoom">Zoom Level</label>
+                        <input type="range" id="zoom" min="10" max="200" value="100">
+                        <span class="value-display">100%</span>
+                    </div>
                 </div>
-                <div class="control-group">
-                    <label for="rotation">Rotation Speed</label>
-                    <input type="range" id="rotation" min="0" max="100" value="0">
-                    <span class="value-display">0</span>
+                
+                <!-- Advanced Physics Controls -->
+                <div class="control-section advanced-controls">
+                    <h3>Physics Settings</h3>
+                    <div class="control-group">
+                        <label for="timeScale">Time Scale</label>
+                        <input type="range" id="timeScale" min="0.1" max="5" step="0.1" value="1.0">
+                        <span class="value-display">1.0x</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="drag">Drag</label>
+                        <input type="range" id="drag" min="0" max="0.1" step="0.001" value="0.02">
+                        <span class="value-display">0.02</span>
+                    </div>
                 </div>
-                <div class="control-group">
-                    <label for="zoom">Zoom Level</label>
-                    <input type="range" id="zoom" min="10" max="200" value="100">
-                    <span class="value-display">100%</span>
+                
+                <!-- Particle Settings -->
+                <div class="control-section advanced-controls">
+                    <h3>Particle Settings</h3>
+                    <div class="control-group">
+                        <label for="particles">Particles</label>
+                        <input type="range" id="particles" min="50" max="2000" step="50" value="500">
+                        <span class="value-display">500</span>
+                    </div>
+                    <div class="control-group checkbox-group">
+                        <label for="trails">Particle Trails</label>
+                        <input type="checkbox" id="trails" checked>
+                    </div>
+                    <div class="control-group">
+                        <label for="trailLength">Trail Length</label>
+                        <input type="range" id="trailLength" min="5" max="200" step="5" value="50">
+                        <span class="value-display">50</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="seed">Random Seed</label>
+                        <input type="number" id="seed" min="1" max="99999" value="12345">
+                    </div>
                 </div>
+                
+                <!-- Action Buttons -->
                 <div class="buttons">
                     <button id="reset">Reset</button>
                     <button id="start-pause">Start</button>
+                    <button id="advanced-toggle">Advanced</button>
                 </div>
             </section>
         </main>
