@@ -195,6 +195,22 @@ main {
     text-align: right;
 }
 
+/* Styling for read-only inputs */
+.control-group input[readonly] {
+    background-color: rgba(20, 20, 20, 0.5);
+    border-color: rgba(88, 166, 255, 0.1);
+    color: var(--accent-color);
+}
+
+/* Physics info display */
+.physics-info {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--accent-color);
+    opacity: 0.7;
+    font-style: italic;
+}
+
 @media (max-width: 768px) {
     .control-panel {
         padding: 1rem;

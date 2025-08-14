@@ -42,6 +42,15 @@
                 <div class="control-section advanced-controls">
                     <h3>Physics Settings</h3>
                     <div class="control-group">
+                        <label for="actual-mass">Black Hole Mass (M☉)</label>
+                        <input type="number" id="actual-mass" min="1" max="1000000000" step="1000" value="1000000">
+                    </div>
+                    <div class="control-group">
+                        <label for="schwarzschild-radius">Schwarzschild Radius (km)</label>
+                        <input type="number" id="schwarzschild-radius" readonly>
+                        <span class="value-display physics-info">rs = 2*G*M/c²</span>
+                    </div>
+                    <div class="control-group">
                         <label for="timeScale">Time Scale</label>
                         <input type="range" id="timeScale" min="0.1" max="5" step="0.1" value="1.0">
                         <span class="value-display">1.0x</span>

@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const trailsCheckbox = document.getElementById('trails');
     const trailLengthSlider = document.getElementById('trailLength');
     const seedInput = document.getElementById('seed');
+    const actualMassInput = document.getElementById('actual-mass');
+    const schwarzschildRadiusInput = document.getElementById('schwarzschild-radius');
     const resetButton = document.getElementById('reset');
     const startPauseButton = document.getElementById('start-pause');
     const advancedToggleButton = document.getElementById('advanced-toggle');
@@ -127,10 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
         rotationSpeed: 0,       // Actual rotation speed in radians per second
         diskAngle: 0,           // Current angle of accretion disk
         
-        // Physics parameters
+        // Physics constants
         G: 6.67430e-11,         // Gravitational constant (m^3 kg^-1 s^-2)
+        c: 299792458,           // Speed of light (m/s)
+        solarMass: 1.989e30,    // Mass of the Sun (kg)
+        
+        // Black hole parameters
         M: 1.0e6,               // Black hole mass in solar masses
-        rs: 2.95,               // Schwarzschild radius in km
+        
+        // Other simulation parameters
         timeScale: 1.0,         // Simulation time scale factor
         
         // Particle system parameters
@@ -140,22 +147,51 @@ document.addEventListener('DOMContentLoaded', () => {
         seed: 12345,            // Random seed for particle generation
         particles: 500,         // Number of particles in simulation
         
-        // Utility methods for getting/setting parameters
+        // Calculate Schwarzschild radius (rs = 2GM/c^2)
         get schwarzschildRadius() {
-            // Calculate Schwarzschild radius based on mass
-            // rs = 2GM/c^2, but we'll use the mass slider to scale from the base rs
-            return this.rs * (this.mass / 50);
+            // Convert solar masses to kg, calculate in meters, then convert to kilometers
+            const massInKg = this.M * this.solarMass;
+            const rsInMeters = (2 * this.G * massInKg) / (this.c * this.c);
+            return rsInMeters / 1000; // Convert to kilometers
         },
         
+        // For UI slider, we use this to map the slider value to actual mass
         get blackHoleMass() {
             // Convert UI mass value to actual solar masses
             return this.M * (this.mass / 50);
+        },
+        
+        // Set M based on the slider value
+        set blackHoleMass(value) {
+            this.M = value;
+            this.updateUI(); // Update UI when M changes
         },
         
         // Method to update derived parameters when base parameters change
         updateDerivedParams() {
             // Update rotation speed based on rotation slider
             this.rotationSpeed = this.rotation * 0.05;
+            
+            // Update actual mass based on the UI slider
+            // Note: This does not update M directly - that's handled separately now
+        },
+        
+        // Method to update UI elements based on current parameter values
+        updateUI() {
+            // Update the actual mass display in the advanced controls
+            const actualMassInput = document.getElementById('actual-mass');
+            if (actualMassInput) {
+                actualMassInput.value = this.M.toLocaleString();
+            }
+            
+            // Update the Schwarzschild radius display
+            const schwarzschildRadiusInput = document.getElementById('schwarzschild-radius');
+            if (schwarzschildRadiusInput) {
+                schwarzschildRadiusInput.value = this.schwarzschildRadius.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
         },
         
         // Method to load parameters from localStorage if available
@@ -170,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.rotation = parsedParams.rotation ?? this.rotation;
                     this.zoom = parsedParams.zoom ?? this.zoom;
                     this.M = parsedParams.M ?? this.M;
-                    this.rs = parsedParams.rs ?? this.rs;
                     this.timeScale = parsedParams.timeScale ?? this.timeScale;
                     this.drag = parsedParams.drag ?? this.drag;
                     this.trails = parsedParams.trails ?? this.trails;
@@ -196,7 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     rotation: this.rotation,
                     zoom: this.zoom,
                     M: this.M,
-                    rs: this.rs,
                     timeScale: this.timeScale,
                     drag: this.drag,
                     trails: this.trails,
@@ -260,7 +294,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners to basic controls
     massSlider.addEventListener('input', () => {
         params.mass = parseInt(massSlider.value);
+        
+        // When mass slider changes, also update the actual mass
+        params.M = params.blackHoleMass;
+        
+        // Update UI displays
         updateValueDisplays();
+        params.updateUI();
         draw();
     });
     
@@ -278,6 +318,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Add event listeners to advanced physics controls
+    actualMassInput?.addEventListener('input', () => {
+        // Parse the input value and update the black hole mass
+        let newMass = parseFloat(actualMassInput.value.replace(/,/g, ''));
+        
+        // Validate the input
+        if (isNaN(newMass) || newMass <= 0) {
+            // Reset to default if invalid
+            newMass = 1.0e6;
+            actualMassInput.value = newMass.toLocaleString();
+        }
+        
+        // Update the mass parameter
+        params.M = newMass;
+        
+        // Update the UI display for Schwarzschild radius
+        params.updateUI();
+        
+        // Update the visualization
+        draw();
+    });
+    
     timeScaleSlider?.addEventListener('input', () => {
         params.timeScale = parseFloat(timeScaleSlider.value);
         updateValueDisplays();
@@ -345,10 +406,13 @@ document.addEventListener('DOMContentLoaded', () => {
             rotationSpeed: 0,
             diskAngle: 0,
             
-            // Physics parameters
+            // Physics constants
             G: 6.67430e-11,
-            M: 1.0e6,
-            rs: 2.95,
+            c: 299792458,
+            solarMass: 1.989e30,
+            
+            // Black hole parameters
+            M: 1.0e6,           // Reset to 1 million solar masses
             timeScale: 1.0,
             
             // Particle system parameters
@@ -360,15 +424,38 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Maintain the getter methods
             get schwarzschildRadius() {
-                return this.rs * (this.mass / 50);
+                // Calculate rs = 2GM/c^2
+                const massInKg = this.M * this.solarMass;
+                const rsInMeters = (2 * this.G * massInKg) / (this.c * this.c);
+                return rsInMeters / 1000; // Convert to kilometers
             },
             
             get blackHoleMass() {
                 return this.M * (this.mass / 50);
             },
             
+            set blackHoleMass(value) {
+                this.M = value;
+                this.updateUI();
+            },
+            
             updateDerivedParams() {
                 this.rotationSpeed = this.rotation * 0.05;
+            },
+            
+            updateUI() {
+                const actualMassInput = document.getElementById('actual-mass');
+                if (actualMassInput) {
+                    actualMassInput.value = this.M.toLocaleString();
+                }
+                
+                const schwarzschildRadiusInput = document.getElementById('schwarzschild-radius');
+                if (schwarzschildRadiusInput) {
+                    schwarzschildRadiusInput.value = this.schwarzschildRadius.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                }
             },
             
             loadFromStorage() {
@@ -521,10 +608,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillText(`DPR: ${getDevicePixelRatio()}`, 10, 70);
             ctx.fillText(`Rotation Speed: ${params.rotationSpeed.toFixed(2)} rad/s`, 10, 90);
             ctx.fillText(`Time Scale: ${params.timeScale.toFixed(1)}x`, 10, 110);
-            ctx.fillText(`Schwarzschild Radius: ${params.schwarzschildRadius.toFixed(2)} km`, 10, 130);
-            ctx.fillText(`Black Hole Mass: ${params.blackHoleMass.toExponential(2)} M☉`, 10, 150);
-            ctx.fillText(`Particles: ${params.particles}`, 10, 170);
-            ctx.fillText(`Trails: ${params.trails ? 'On' : 'Off'}`, 10, 190);
+            ctx.fillText(`Black Hole Mass: ${params.M.toExponential(2)} M☉`, 10, 130);
+            ctx.fillText(`Schwarzschild Radius: ${params.schwarzschildRadius.toFixed(2)} km`, 10, 150);
+            ctx.fillText(`Formula: rs = 2GM/c² = ${(2 * params.G).toExponential(2)}×M/c²`, 10, 170);
+            ctx.fillText(`Particles: ${params.particles}`, 10, 190);
+            ctx.fillText(`Trails: ${params.trails ? 'On' : 'Off'}`, 10, 210);
         }
         
         // Calculate center and radius (use logical coordinates)
@@ -674,6 +762,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize displays
     updateValueDisplays();
+    
+    // Update physics values display
+    params.updateUI();
     
     // Initial draw
     draw();
